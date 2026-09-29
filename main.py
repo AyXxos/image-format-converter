@@ -1,19 +1,18 @@
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from PIL import Image, ImageTk
+from PIL import Image
 
 
-class ConvertisseurApp:
+class ConvertisseurBatchApp:
 
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Convertisseur d'Images")
-        self.root.geometry("600x600")
+        self.root.title("Convertisseur d'Images en Lot")
+        self.root.geometry("620x540")
         self.root.resizable(False, False)
 
-        self.fichier_actuel: Path | None = None
-        self.image_preview: ImageTk.PhotoImage | None = None
+        self.fichiers_charges: list[Path] = []
 
         self._creer_style()
         self._creer_widgets()
@@ -31,37 +30,42 @@ class ConvertisseurApp:
         # En-tête
         header = ttk.Label(
             self.root,
-            text="Convertisseur d'Images Express",
+            text="Convertisseur d'Images",
             style="Header.TLabel",
         )
         header.pack(pady=15)
 
-        # Zone Sélection & Aperçu
+        # Zone Sélection
         frame_fichier = ttk.LabelFrame(
-            self.root, text=" Fichier source ", padding=10
+            self.root, text=" Images sources ", padding=10
         )
         frame_fichier.pack(fill="x", padx=20, pady=5)
 
-        btn_parcourir = ttk.Button(
-            frame_fichier,
-            text="Choisir une image...",
-            command=self.charger_image,
-        )
-        btn_parcourir.pack(anchor="w", pady=5)
+        btn_box = ttk.Frame(frame_fichier)
+        btn_box.pack(fill="x", pady=5)
 
-        self.lbl_chemin = ttk.Label(
+        btn_fichiers = ttk.Button(
+            btn_box,
+            text="Choisir des fichiers...",
+            command=self.charger_fichiers,
+        )
+        btn_fichiers.pack(side="left", padx=5)
+
+        btn_dossier = ttk.Button(
+            btn_box, text="Choisir un dossier...", command=self.charger_dossier
+        )
+        btn_dossier.pack(side="left", padx=5)
+
+        # Liste affichant les fichiers sélectionnés
+        self.listbox = tk.Listbox(
+            frame_fichier, height=6, selectmode=tk.EXTENDED
+        )
+        self.listbox.pack(fill="x", pady=5)
+
+        self.lbl_compteur = ttk.Label(
             frame_fichier, text="Aucun fichier sélectionné", foreground="gray"
         )
-        self.lbl_chemin.pack(anchor="w")
-
-        # Cadre d'aperçu
-        self.lbl_preview = ttk.Label(
-            frame_fichier,
-            text="Aperçu indisponible",
-            background="#f0f0f0",
-            anchor="center",
-        )
-        self.lbl_preview.pack(fill="x", pady=10, ipady=30)
+        self.lbl_compteur.pack(anchor="w")
 
         # Options de conversion
         frame_options = ttk.LabelFrame(
@@ -100,11 +104,11 @@ class ConvertisseurApp:
         self.lbl_qualite_val = ttk.Label(frame_options, text="85 %")
         self.lbl_qualite_val.grid(row=1, column=2, sticky="w", padx=5)
 
-        # Action & Progression
+        # Bouton Action & Progression
         self.btn_convertir = ttk.Button(
             self.root,
-            text="Convertir l'image",
-            command=self.convertir,
+            text="Tout convertir",
+            command=self.convertir_tout,
             state="disabled",
         )
         self.btn_convertir.pack(pady=10)
@@ -115,85 +119,104 @@ class ConvertisseurApp:
     def _update_label_qualite(self, val):
         self.lbl_qualite_val.config(text=f"{int(float(val))} %")
 
-    def charger_image(self):
-        path = filedialog.askopenfilename(
-            title="Sélectionner une image",
+    def _mettre_a_jour_liste(self):
+        self.listbox.delete(0, tk.END)
+        for f in self.fichiers_charges:
+            self.listbox.insert(tk.END, f.name)
+
+        nb = len(self.fichiers_charges)
+        if nb > 0:
+            self.lbl_compteur.config(
+                text=f"{nb} fichier(s) sélectionné(s)", foreground="black"
+            )
+            self.btn_convertir.config(state="normal")
+        else:
+            self.lbl_compteur.config(
+                text="Aucun fichier sélectionné", foreground="gray"
+            )
+            self.btn_convertir.config(state="disabled")
+
+    def charger_fichiers(self):
+        paths = filedialog.askopenfilenames(
+            title="Sélectionner une ou plusieurs images",
             filetypes=[
-                (
-                    "Images",
-                    "*.png *.jpg *.jpeg *.webp *.bmp *.gif",
-                ),
+                ("Images", "*.png *.jpg *.jpeg *.webp *.bmp *.gif"),
                 ("Tous les fichiers", "*.*"),
             ],
         )
-        if not path:
-            return
+        if paths:
+            self.fichiers_charges = [Path(p) for p in paths]
+            self._mettre_a_jour_liste()
 
-        self.fichier_actuel = Path(path)
-        self.lbl_chemin.config(
-            text=f"Fichier : {self.fichier_actuel.name}", foreground="black"
+    def charger_dossier(self):
+        dossier = filedialog.askdirectory(
+            title="Sélectionner un dossier d'images"
         )
+        if dossier:
+            extensions = ("*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp")
+            fichiers = []
+            path_dossier = Path(dossier)
+            for ext in extensions:
+                fichiers.extend(path_dossier.glob(ext))
 
-        # Génération d'un vignette d'aperçu
-        try:
-            with Image.open(self.fichier_actuel) as img:
-                img.thumbnail((200, 120))
-                self.image_preview = ImageTk.PhotoImage(img)
-                self.lbl_preview.config(image=self.image_preview, text="")
-            self.btn_convertir.config(state="normal")
-        except Exception as e:
-            messagebox.showerror("Erreur", f"Impossible de lire l'image : {e}")
+            self.fichiers_charges = sorted(fichiers)
+            self._mettre_a_jour_liste()
 
-    def convertir(self):
-        if not self.fichier_actuel:
+    def convertir_tout(self):
+        if not self.fichiers_charges:
             return
 
+        # Choix du dossier où enregistrer les images converties
+        dossier_sortie = filedialog.askdirectory(
+            title="Choisir le dossier de destination"
+        )
+        if not dossier_sortie:
+            return
+
+        dest = Path(dossier_sortie)
         format_cible = self.var_format.get().lower()
         qualite = self.var_qualite.get()
 
-        fichier_sortie = filedialog.asksaveasfilename(
-            defaultextension=f".{format_cible}",
-            initialfile=f"{self.fichier_actuel.stem}.{format_cible}",
-            filetypes=[(f"Image {format_cible.upper()}", f"*.{format_cible}")],
-        )
+        total = len(self.fichiers_charges)
+        self.progress["maximum"] = total
+        self.progress["value"] = 0
 
-        if not fichier_sortie:
-            return
+        succes = 0
+        erreurs = 0
 
-        self.progress["value"] = 30
-        self.root.update_idletasks()
+        for idx, fichier in enumerate(self.fichiers_charges, start=1):
+            fichier_sortie = dest / f"{fichier.stem}.{format_cible}"
 
-        try:
-            with Image.open(self.fichier_actuel) as img:
-                # Gestion du mode couleur selon le format cible (transparence RGBA -> RGB)
-                if format_cible in ["jpeg", "jpg"] and img.mode in (
-                    "RGBA",
-                    "P",
-                ):
-                    img = img.convert("RGB")
+            try:
+                with Image.open(fichier) as img:
+                    if format_cible in ["jpeg", "jpg"] and img.mode in (
+                        "RGBA",
+                        "P",
+                    ):
+                        img = img.convert("RGB")
 
-                self.progress["value"] = 70
-                self.root.update_idletasks()
+                    img.save(
+                        fichier_sortie,
+                        format=format_cible.upper(),
+                        quality=qualite,
+                        optimize=True,
+                    )
+                    succes += 1
+            except Exception:
+                erreurs += 1
 
-                img.save(
-                    fichier_sortie,
-                    format=format_cible.upper(),
-                    subsampling=0,
-                    quality=qualite,
-                    optimize=True,
-                )
+            self.progress["value"] = idx
+            self.root.update_idletasks()
 
-            self.progress["value"] = 100
-            messagebox.showinfo(
-                "Succès", f"Fichier enregistré :\n{fichier_sortie}"
-            )
-        except Exception as e:
-            messagebox.showerror("Erreur de conversion", str(e))
-        finally:
-            self.progress["value"] = 0
+        msg = f"Conversion terminée !\n\n- {succes} image(s) réussie(s)"
+        if erreurs > 0:
+            msg += f"\n- {erreurs} échec(s)"
+
+        messagebox.showinfo("Résultat", msg)
+        self.progress["value"] = 0
 
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = ConvertisseurApp(root)
+    app = ConvertisseurBatchApp(root)
     root.mainloop()
