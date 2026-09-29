@@ -9,7 +9,7 @@ class ConvertisseurBatchApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Convertisseur d'Images en Lot")
-        self.root.geometry("620x540")
+        self.root.geometry("620x580")
         self.root.resizable(False, False)
 
         self.fichiers_charges: list[Path] = []
@@ -30,7 +30,7 @@ class ConvertisseurBatchApp:
         # En-tête
         header = ttk.Label(
             self.root,
-            text="Convertisseur d'Images",
+            text="Convertisseur d'Images en Lot",
             style="Header.TLabel",
         )
         header.pack(pady=15)
@@ -104,7 +104,7 @@ class ConvertisseurBatchApp:
         self.lbl_qualite_val = ttk.Label(frame_options, text="85 %")
         self.lbl_qualite_val.grid(row=1, column=2, sticky="w", padx=5)
 
-        # Bouton Action & Progression
+        # Bouton Action
         self.btn_convertir = ttk.Button(
             self.root,
             text="Tout convertir",
@@ -113,8 +113,17 @@ class ConvertisseurBatchApp:
         )
         self.btn_convertir.pack(pady=10)
 
-        self.progress = ttk.Progressbar(self.root, mode="determinate")
-        self.progress.pack(fill="x", padx=20, pady=5)
+        # Zone de Progression dédiée
+        frame_progression = ttk.Frame(self.root)
+        frame_progression.pack(fill="x", padx=20, pady=5)
+
+        self.lbl_status = ttk.Label(
+            frame_progression, text="", font=("Segoe UI", 9, "italic")
+        )
+        self.lbl_status.pack(anchor="w", pady=(0, 2))
+
+        self.progress = ttk.Progressbar(frame_progression, mode="determinate")
+        self.progress.pack(fill="x")
 
     def _update_label_qualite(self, val):
         self.lbl_qualite_val.config(text=f"{int(float(val))} %")
@@ -166,7 +175,6 @@ class ConvertisseurBatchApp:
         if not self.fichiers_charges:
             return
 
-        # Choix du dossier où enregistrer les images converties
         dossier_sortie = filedialog.askdirectory(
             title="Choisir le dossier de destination"
         )
@@ -178,13 +186,23 @@ class ConvertisseurBatchApp:
         qualite = self.var_qualite.get()
 
         total = len(self.fichiers_charges)
+
+        # Configuration de la barre de progression
         self.progress["maximum"] = total
         self.progress["value"] = 0
+        self.btn_convertir.config(state="disabled")
 
         succes = 0
         erreurs = 0
 
         for idx, fichier in enumerate(self.fichiers_charges, start=1):
+            # Mise à jour du texte de statut et de la barre
+            self.lbl_status.config(
+                text=f"Traitement : {idx}/{total} ({fichier.name})"
+            )
+            self.progress["value"] = idx - 1
+            self.root.update()  # Forcer le rafraîchissement graphique immédiat
+
             fichier_sortie = dest / f"{fichier.stem}.{format_cible}"
 
             try:
@@ -205,15 +223,19 @@ class ConvertisseurBatchApp:
             except Exception:
                 erreurs += 1
 
+            # Progression de la barre après la sauvegarde de l'image
             self.progress["value"] = idx
-            self.root.update_idletasks()
+            self.root.update()
+
+        # Fin du traitement
+        self.lbl_status.config(text="Conversion terminée !", foreground="green")
+        self.btn_convertir.config(state="normal")
 
         msg = f"Conversion terminée !\n\n- {succes} image(s) réussie(s)"
         if erreurs > 0:
             msg += f"\n- {erreurs} échec(s)"
 
         messagebox.showinfo("Résultat", msg)
-        self.progress["value"] = 0
 
 
 if __name__ == "__main__":
